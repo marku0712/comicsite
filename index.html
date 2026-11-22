@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MONO ARCHIVE | 自主制作漫画書庫</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Shippori+Mincho:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #111111;
+      --paper: #FAFAFA;
+      --surface: #FFFFFF;
+      --border: #1A1A1A;
+      --muted: #666666;
+    }
+    body {
+      font-family: 'Noto Sans JP', sans-serif;
+      background-color: var(--paper);
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+    }
+    .font-mincho {
+      font-family: 'Shippori Mincho', serif;
+    }
+    /* 単行本表紙比率と背表紙の装飾 */
+    .book-cover {
+      aspect-ratio: 1 / 1.414;
+      position: relative;
+      background: #FFFFFF;
+      border: 1.5px solid #111111;
+      box-shadow: 6px 6px 0px #111111;
+      transition: transform 0.22s ease, box-shadow 0.22s ease;
+      overflow: hidden;
+    }
+    .book-card:hover .book-cover {
+      transform: translate(-2px, -2px);
+      box-shadow: 9px 9px 0px #111111;
+    }
+    /* 右開き単行本らしい右端の背表紙溝ライン */
+    .book-cover::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      right: 10px;
+      width: 1px;
+      background: rgba(0, 0, 0, 0.22);
+      box-shadow: -1px 0 0 rgba(255, 255, 255, 0.6);
+      pointer-events: none;
+    }
+    /* スクロールバー抑制 */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    /* 原稿ページの紙面シャドウ */
+    .manga-sheet {
+      background: #FFFFFF;
+      border: 1px solid #222222;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-black selection:text-white">
+
+  <!-- 管理者専用トップバー（管理者認証時のみ表示） -->
+  <div id="adminBar" class="hidden bg-black text-white border-b border-neutral-800 sticky top-0 z-40">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs sm:text-sm">
+      <div class="flex items-center gap-2.5">
+        <span class="inline-block w-2 h-2 bg-white"></span>
+        <span class="font-mincho tracking-widest font-semibold">CREATOR MODE</span>
+        <span id="adminEmailLabel" class="text-neutral-400 hidden sm:inline"></span>
+      </div>
+      <div class="flex items-center gap-2 sm:gap-3">
+        <button onclick="openEditorModal()" class="bg-white text-black px-3 py-1.5 font-medium hover:bg-neutral-200 transition">
+          ＋ 新しい漫画を投稿
+        </button>
+        <button onclick="openAdModal()" class="border border-neutral-500 text-white px-3 py-1.5 hover:bg-neutral-900 transition">
+          巻末・下段広告の設定
+        </button>
+        <button onclick="logoutAdmin()" class="text-neutral-400 hover:text-white px-2 py-1.5 transition">
+          ログアウト
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ヘッダー -->
+  <header class="border-b-2 border-black bg-white">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+      <div>
+        <p class="text-[11px] tracking-[0.28em] text-neutral-500 uppercase mb-2">ORIGINAL MONOCHROME MANGA ARCHIVE</p>
+        <h1 class="font-mincho text-2xl sm:text-4xl font-bold tracking-wider text-black">
+          黒白漫画書庫
+        </h1>
+      </div>
+      <p class="text-xs sm:text-sm text-neutral-600 leading-relaxed max-w-md">
+        個人制作のモノクロ漫画を公開しています。表紙をクリックすると、会員登録不要ですぐに全編をお読みいただけます。
+      </p>
+    </div>
+  </header>
+
+  <!-- メインコンテンツ：横3列の表紙ギャラリー -->
+  <main class="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-10 sm:py-14">
+    <div class="flex items-baseline justify-between border-b border-black pb-3 mb-8">
+      <h2 class="font-mincho text-lg sm:text-xl font-bold tracking-widest">掲載作品一覧</h2>
+      <span id="workCountLabel" class="text-xs text-neutral-500 tracking-wider">全 3 作品</span>
+    </div>
+
+    <!-- 横3列グリッド（スマホ1列 / タブレット2列 / PC横3列） -->
+    <div id="mangaGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 sm:gap-10">
+      <!-- JavaScriptで動的に描画 -->
+    </div>
+
+    <!-- ホームページ下部のスポンサー・広告枠 -->
+    <section class="mt-16 pt-8 border-t border-neutral-300">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-[10px] tracking-[0.25em] text-neutral-400 uppercase">SPONSOR / ANNOUNCEMENT</span>
+      </div>
+      <div id="homeAdContainer" class="bg-white border border-neutral-300 p-5 sm:p-6">
+        <!-- JavaScriptで広告内容を描画 -->
+      </div>
+    </section>
+  </main>
+
+  <!-- フッター -->
+  <footer class="border-t border-black bg-white mt-12">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-neutral-600">
+      <div class="flex items-center gap-4">
+        <span class="font-mincho font-bold text-black tracking-wider">黒白漫画書庫</span>
+        <span>&copy; 2026 All Rights Reserved.</span>
+      </div>
+      <div class="flex items-center gap-5">
+        <button onclick="openPrivacyModal()" class="hover:text-black underline underline-offset-4">プライバシーポリシー・広告について</button>
+        <button id="footerAuthBtn" onclick="openAuthModal()" class="text-neutral-400 hover:text-black transition">管理者ログイン</button>
+      </div>
+    </div>
+  </footer>
+
+  <!-- =========================================================
+       1. 右開きWeb漫画ビューア（話間目次ページ ＋ 巻末広告対応）
+       ========================================================= -->
+  <div id="readerModal" class="hidden fixed inset-0 z-50 bg-neutral-950 text-white flex flex-col select-none">
+    <!-- ビューア上部バー -->
+    <div class="h-13 px-4 sm:px-6 py-2.5 bg-black border-b border-neutral-800 flex items-center justify-between gap-3 z-20">
+      <div class="flex items-center gap-3 min-w-0">
+        <button onclick="closeReader()" class="px-3 py-1 border border-neutral-700 hover:bg-neutral-800 text-xs tracking-wider shrink-0">
+          ← 書庫へ戻る
+        </button>
+        <div class="truncate">
+          <span id="readerTitle" class="font-mincho text-sm sm:text-base font-bold tracking-wide"></span>
+          <span id="readerSubLabel" class="text-xs text-neutral-400 ml-2"></span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+        <button onclick="jumpToLatestToc()" class="hidden sm:inline-block px-2.5 py-1 border border-neutral-700 text-xs text-neutral-300 hover:text-white hover:border-white transition">
+          目次へ
+        </button>
+        <span id="pageIndicator" class="text-xs font-mono text-neutral-300 px-2">1 / 1</span>
+        <button onclick="closeReader()" class="w-8 h-8 flex items-center justify-center text-neutral-400 hover:text-white text-lg" aria-label="閉じる">✕</button>
+      </div>
+    </div>
+
+    <!-- ビューア中央ステージ（左クリック/左キーで次へ＝日本の右開き操作） -->
+    <div id="readerStage" class="flex-1 relative flex items-center justify-center overflow-y-auto p-3 sm:p-6">
+      <!-- 左右クリック領域（日本の右開き：左半分タップで「次のページ」、右半分タップで「前のページ」） -->
+      <div onclick="nextSlide()" title="次のページへ（左クリック）" class="fixed inset-y-14 left-0 w-1/3 z-10 cursor-w-resize"></div>
+      <div onclick="prevSlide()" title="前のページへ（右クリック）" class="fixed inset-y-14 right-0 w-1/3 z-10 cursor-e-resize"></div>
+
+      <!-- 実際の表示カード（漫画原稿 / 話間目次 / 巻末広告） -->
+      <div id="slideRenderTarget" class="relative z-20 w-full max-w-2xl mx-auto flex items-center justify-center">
+        <!-- JSで描画 -->
+      </div>
+    </div>
+
+    <!-- ビューア下部シークバー＆操作ガイド -->
+    <div class="bg-black border-t border-neutral-800 px-4 sm:px-6 py-3 z-20">
+      <div class="max-w-3xl mx-auto flex items-center gap-4">
+        <button onclick="nextSlide()" class="px-3 py-1.5 bg-white text-black text-xs font-bold hover:bg-neutral-200 transition shrink-0">
+          ← 次へ
+        </button>
+        <!-- 右開きに合わせて右から左へ進むスライダー -->
+        <input id="readerSlider" type="range" min="0" max="0" value="0" dir="rtl" oninput="goToSlide(parseInt(this.value, 10))" class="flex-1 accent-white cursor-pointer" />
+        <button onclick="prevSlide()" class="px-3 py-1.5 border border-neutral-700 text-neutral-300 text-xs hover:text-white transition shrink-0">
+          前へ →
+        </button>
+      </div>
+      <p class="text-center text-[11px] text-neutral-500 mt-1.5">
+        右開き（←キー または 画面左側クリックで次のページへ進みます）
+      </p>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       2. 管理者認証モーダル（あなた専用ロック）
+       ========================================================= -->
+  <div id="authModal" class="hidden fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+    <div class="bg-white border-2 border-black max-w-md w-full p-6 sm:p-8 shadow-[8px_8px_0px_#000]">
+      <div class="flex items-center justify-between border-b border-black pb-3 mb-5">
+        <h3 id="authModalTitle" class="font-mincho text-lg font-bold tracking-wider">管理者認証</h3>
+        <button onclick="closeAuthModal()" class="text-neutral-500 hover:text-black">✕</button>
+      </div>
+      <p id="authModalDesc" class="text-xs text-neutral-600 leading-relaxed mb-5"></p>
+      <form onsubmit="handleAuthSubmit(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold mb-1">管理者メールアドレス</label>
+          <input id="authEmail" type="email" required placeholder="creator@example.com" class="w-full border border-black px-3 py-2 text-sm focus:outline-none focus:bg-neutral-50" />
+        </div>
+        <div>
+          <label class="block text-xs font-bold mb-1">パスワード</label>
+          <input id="authPassword" type="password" required minlength="4" placeholder="4文字以上" class="w-full border border-black px-3 py-2 text-sm focus:outline-none focus:bg-neutral-50" />
+        </div>
+        <p id="authError" class="hidden text-xs text-red-600 font-medium"></p>
+        <div class="pt-2 flex items-center justify-end gap-3">
+          <button type="button" onclick="closeAuthModal()" class="px-4 py-2 border border-neutral-400 text-xs hover:border-black">キャンセル</button>
+          <button id="authSubmitBtn" type="submit" class="px-5 py-2 bg-black text-white text-xs font-bold tracking-wider hover:bg-neutral-800">認証する</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       3. 漫画投稿・話別編集モーダル（管理者専用）
+       ========================================================= -->
+  <div id="editorModal" class="hidden fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white border-2 border-black max-w-3xl w-full p-6 sm:p-8 my-8 max-h-[90vh] overflow-y-auto shadow-[8px_8px_0px_#000]">
+      <div class="flex items-center justify-between border-b border-black pb-3 mb-6">
+        <h3 id="editorModalTitle" class="font-mincho text-xl font-bold tracking-wider">作品の投稿・編集</h3>
+        <button onclick="closeEditorModal()" class="text-neutral-500 hover:text-black text-lg">✕</button>
+      </div>
+
+      <form onsubmit="saveMangaWork(event)" class="space-y-6">
+        <input type="hidden" id="editWorkId" />
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold mb-1">作品タイトル <span class="text-red-600">*</span></label>
+            <input id="editTitle" type="text" required placeholder="例：ねこだま。" class="w-full border border-black px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold mb-1">ジャンル / サブ表記</label>
+            <input id="editTag" type="text" placeholder="例：怪異日常譚 / 連載中" class="w-full border border-black px-3 py-2 text-sm" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold mb-1">あらすじ・作品紹介</label>
+          <textarea id="editSynopsis" rows="2" placeholder="ホームページの表紙下に表示される紹介文" class="w-full border border-black px-3 py-2 text-sm"></textarea>
+        </div>
+
+        <!-- 表紙画像設定 -->
+        <div class="border border-neutral-300 p-4 bg-neutral-50">
+          <label class="block text-xs font-bold mb-2">表紙画像（画像ファイル選択 または URL入力）</label>
+          <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+            <input id="editCoverFile" type="file" accept="image/*" onchange="handleCoverUpload(event)" class="text-xs" />
+            <input id="editCoverUrl" type="text" placeholder="または画像URL（空欄ならモノクロ自動表紙を生成）" class="flex-1 w-full border border-black bg-white px-3 py-1.5 text-xs" />
+          </div>
+        </div>
+
+        <!-- エピソード（話）単位の編集エリア -->
+        <div>
+          <div class="flex items-center justify-between border-b border-black pb-2 mb-3">
+            <div>
+              <span class="text-xs font-bold">各話の構成（1話ごとに自動で区切り目次ページが挿入されます）</span>
+            </div>
+            <button type="button" onclick="addEpisodeBlock()" class="px-3 py-1 bg-black text-white text-xs hover:bg-neutral-800">
+              ＋ 話を追加
+            </button>
+          </div>
+          <div id="episodesEditorList" class="space-y-4">
+            <!-- JSで各話の編集ブロックを描画 -->
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold mb-1">巻末あとがき（全話読了後の広告ページに表示）</label>
+          <textarea id="editAfterword" rows="2" placeholder="お読みいただきありがとうございました。次回更新のお知らせなど。" class="w-full border border-black px-3 py-2 text-sm"></textarea>
+        </div>
+
+        <div class="pt-3 border-t border-neutral-300 flex items-center justify-end gap-3">
+          <button type="button" onclick="closeEditorModal()" class="px-4 py-2 border border-neutral-400 text-xs hover:border-black">キャンセル</button>
+          <button type="submit" class="px-6 py-2.5 bg-black text-white text-xs font-bold tracking-wider hover:bg-neutral-800">保存して公開する</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       4. 巻末・ページ下広告設定モーダル（管理者専用）
+       ========================================================= -->
+  <div id="adModal" class="hidden fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+    <div class="bg-white border-2 border-black max-w-xl w-full p-6 sm:p-8 shadow-[8px_8px_0px_#000]">
+      <div class="flex items-center justify-between border-b border-black pb-3 mb-5">
+        <h3 class="font-mincho text-lg font-bold tracking-wider">巻末・ホームページ広告の設定</h3>
+        <button onclick="closeAdModal()" class="text-neutral-500 hover:text-black">✕</button>
+      </div>
+      <form onsubmit="saveAdConfig(event)" class="space-y-4 text-xs">
+        <div>
+          <label class="block font-bold mb-1">広告表示モード</label>
+          <select id="adModeSelect" onchange="toggleAdModeFields()" class="w-full border border-black px-3 py-2 bg-white">
+            <option value="banner">自作プロモーション枠（BOOTH・FANBOX・単行本案内など）</option>
+            <option value="html">広告ネットワークHTMLコード（Google AdSense / 忍者AdMax等）</option>
+          </select>
+        </div>
+
+        <div id="adBannerFields" class="space-y-3">
+          <div>
+            <label class="block font-bold mb-1">見出しテキスト</label>
+            <input id="adTitleInput" type="text" class="w-full border border-black px-3 py-2" />
+          </div>
+          <div>
+            <label class="block font-bold mb-1">説明文</label>
+            <textarea id="adDescInput" rows="2" class="w-full border border-black px-3 py-2"></textarea>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block font-bold mb-1">リンク先URL</label>
+              <input id="adLinkInput" type="url" placeholder="https://..." class="w-full border border-black px-3 py-2" />
+            </div>
+            <div>
+              <label class="block font-bold mb-1">ボタン文言</label>
+              <input id="adBtnInput" type="text" class="w-full border border-black px-3 py-2" />
+            </div>
+          </div>
+        </div>
+
+        <div id="adHtmlFields" class="hidden">
+          <label class="block font-bold mb-1">広告タグ（HTML / スクリプト）</label>
+          <textarea id="adHtmlInput" rows="5" placeholder="<ins class='adsbygoogle' ...></ins>" class="w-full border border-black px-3 py-2 font-mono"></textarea>
+        </div>
+
+        <div class="pt-3 flex justify-end gap-3">
+          <button type="button" onclick="closeAdModal()" class="px-4 py-2 border border-neutral-400 hover:border-black">キャンセル</button>
+          <button type="submit" class="px-5 py-2 bg-black text-white font-bold tracking-wider hover:bg-neutral-800">広告設定を保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       5. プライバシーポリシー（AdSense審査用）モーダル
+       ========================================================= -->
+  <div id="privacyModal" class="hidden fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+    <div class="bg-white border-2 border-black max-w-lg w-full p-6 sm:p-8 shadow-[8px_8px_0px_#000]">
+      <div class="flex items-center justify-between border-b border-black pb-3 mb-4">
+        <h3 class="font-mincho text-lg font-bold">プライバシーポリシー・広告配信について</h3>
+        <button onclick="closePrivacyModal()" class="text-neutral-500 hover:text-black">✕</button>
+      </div>
+      <div class="text-xs text-neutral-700 leading-relaxed space-y-3">
+        <p>当サイトでは、作品制作の継続を目的として第三者配信の広告サービス（Google AdSense 等）およびアフィリエイトプログラムを利用する場合があります。</p>
+        <p>広告配信事業者は、ユーザーの興味に応じた広告を表示するために Cookie（クッキー）を使用することがあります。Cookie を無効にする設定および Google アドセンスに関する詳細は「Google ポリシーと規約」をご覧ください。</p>
+        <p>当サイトに掲載されているすべての漫画・イラスト・文章の著作権は作者に帰属します。無断転載・AI学習への利用・再配布を禁じます。</p>
+      </div>
+      <div class="mt-6 text-right">
+        <button onclick="closePrivacyModal()" class="px-5 py-2 bg-black text-white text-xs font-bold">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* =========================================================
+       初期データ生成（SVGモノクロ原稿プレースホルダー付き）
+       ========================================================= */
+    function makeComicPageSvg(workTitle, epLabel, pageNum, caption, motif) {
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="800" height="1130" viewBox="0 0 800 1130">
+          <rect width="800" height="1130" fill="#FFFFFF"/>
+          <rect x="36" y="36" width="728" height="1058" fill="none" stroke="#111111" stroke-width="3"/>
+          <!-- コマ割り風フレーム -->
+          <rect x="56" y="56" width="688" height="310" fill="none" stroke="#111111" stroke-width="2"/>
+          <rect x="56" y="386" width="334" height="330" fill="none" stroke="#111111" stroke-width="2"/>
+          <rect x="410" y="386" width="334" height="330" fill="none" stroke="#111111" stroke-width="2"/>
+          <rect x="56" y="736" width="688" height="338" fill="none" stroke="#111111" stroke-width="2"/>
+          <!-- 繊細な線画モチーフ -->
+          <circle cx="400" cy="210" r="78" fill="none" stroke="#111111" stroke-width="1.5"/>
+          <line x1="120" y1="210" x2="680" y2="210" stroke="#111111" stroke-width="1" stroke-dasharray="4 4"/>
+          <text x="400" y="535" font-family="serif" font-size="22" fill="#111111" text-anchor="middle">${motif}</text>
+          <text x="400" y="885" font-family="serif" font-size="26" font-weight="bold" fill="#111111" text-anchor="middle">${caption}</text>
+          <text x="400" y="930" font-family="sans-serif" font-size="15" fill="#555555" text-anchor="middle">${workTitle} — ${epLabel}（P.${pageNum}）</text>
+          <text x="400" y="1115" font-family="monospace" font-size="14" fill="#333333" text-anchor="middle">- ${pageNum} -</text>
+        </svg>
+      `;
+      return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+    }
+
+    function makeCoverSvg(title, subtitle, volNo, symbolType) {
+      let art = "";
+      if (symbolType === "cat") {
+        art = `
+          <circle cx="300" cy="400" r="110" fill="none" stroke="#111111" stroke-width="2"/>
+          <path d="M225 335 L210 255 L275 300 M375 335 L390 255 L325 300" fill="none" stroke="#111111" stroke-width="2.5"/>
+          <circle cx="268" cy="390" r="7" fill="#111111"/>
+          <circle cx="332" cy="390" r="7" fill="#111111"/>
+          <path d="M250 490 Q300 540 350 490" fill="none" stroke="#111111" stroke-width="1.5" stroke-dasharray="5 5"/>
+        `;
+      } else if (symbolType === "star") {
+        art = `
+          <polygon points="300,260 326,365 435,365 346,428 380,532 300,468 220,532 254,428 165,365 274,365" fill="none" stroke="#111111" stroke-width="2"/>
+          <circle cx="300" cy="405" r="135" fill="none" stroke="#111111" stroke-width="1"/>
+          <line x1="120" y1="405" x2="480" y2="405" stroke="#111111" stroke-width="1"/>
+        `;
+      } else {
+        art = `
+          <rect x="205" y="290" width="190" height="230" fill="none" stroke="#111111" stroke-width="2"/>
+          <circle cx="300" cy="405" r="65" fill="none" stroke="#111111" stroke-width="1.5"/>
+          <line x1="300" y1="260" x2="300" y2="550" stroke="#111111" stroke-width="1.2"/>
+        `;
+      }
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="600" height="848" viewBox="0 0 600 848">
+          <rect width="600" height="848" fill="#FFFFFF"/>
+          <rect x="24" y="24" width="552" height="800" fill="none" stroke="#111111" stroke-width="2"/>
+          <text x="52" y="76" font-family="monospace" font-size="15" letter-spacing="4" fill="#111111">ARCHIVE VOL.${volNo}</text>
+          <line x1="52" y1="92" x2="548" y2="92" stroke="#111111" stroke-width="1"/>
+          ${art}
+          <line x1="52" y1="620" x2="548" y2="620" stroke="#111111" stroke-width="1.5"/>
+          <text x="52" y="685" font-family="serif" font-size="40" font-weight="bold" fill="#111111">${title}</text>
+          <text x="54" y="730" font-family="sans-serif" font-size="16" fill="#444444">${subtitle}</text>
+          <text x="52" y="792" font-family="monospace" font-size="13" letter-spacing="3" fill="#666666">MONOCHROME EDITION</text>
+        </svg>
+      `;
+      return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+    }
+
+    const DEFAULT_WORKS = [
+      {
+        id: "work_nekodama",
+        title: "ねこだま。",
+        tag: "怪異日常譚 / 連載中",
+        synopsis: "気弱で少しぼーっとしているけれど知的な少年アルメンと、彼にまとわりつく手のない猫の亡霊「ねこだま」の静かで不思議な日々。",
+        cover: makeCoverSvg("ねこだま。", "アルメンと手のない猫の亡霊", "01", "cat"),
+        afterword: "『ねこだま。』をお読みいただきありがとうございます。単行本作業や次話のネーム
